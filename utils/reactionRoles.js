@@ -49,7 +49,7 @@ async function handleReactionAdd(reaction, user) {
     if (!role) return;
 
     await member.roles.add(role);
-    console.log(`${user.tag} a reçu le rôle ${role.name}`);
+    console.log(`${reaction.emoji} ${user.tag} a reçu le rôle ${role.name}`);
 }
 
 async function handleReactionRemove(reaction, user) {
@@ -64,7 +64,7 @@ async function handleReactionRemove(reaction, user) {
     if (!role) return;
 
     await member.roles.remove(role);
-    console.log(`${user.tag} a perdu le rôle ${role.name}`);
+    console.log(`${reaction.emoji} ${user.tag} a perdu le rôle ${role.name}`);
 }
 
 module.exports = { REACTION_ROLES, handleReactionAdd, handleReactionRemove };
