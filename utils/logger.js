@@ -1,5 +1,6 @@
 const { EmbedBuilder } = require("discord.js");
 const { LOG_CHANNEL_ID } = require("../config/config");
+const COLORS = require("./colors");
 
 function getLogChannel(guild) {
     return guild.channels.cache.get(LOG_CHANNEL_ID);
@@ -12,7 +13,7 @@ function sendLog(guild, content) {
 }
 
 // Mise en page dédiée aux actions de modération : qui a été visé + l'ID du modérateur qui a utilisé la commande.
-function sendModerationLog(guild, { title, emoji, color = 0x5865f2, target, moderator, reason, extraFields = [] }) {
+function sendModerationLog(guild, { title, emoji, color = COLORS.PRIMARY, target, moderator, reason, extraFields = [] }) {
     const channel = getLogChannel(guild);
     if (!channel) return;
 

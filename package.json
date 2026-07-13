@@ -1,12 +1,12 @@
 {
   "dependencies": {
+    "@napi-rs/canvas": "^1.0.2",
     "discord.js": "^14.26.5",
     "dotenv": "^17.4.2"
   },
   "name": "astybot",
   "version": "1.0.0",
   "main": "index.js",
-  "devDependencies": {},
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },

@@ -1,3 +1,10 @@
+const {
+    WELCOME_ROLE_ID,
+    RULES_MESSAGE_ID,
+    RULES_REACTION_EMOJI,
+    RISING_STAR_ROLE_ID,
+} = require("../config/config");
+
 // Mapping messageID -> { emoji: roleID }
 const REACTION_ROLES = {
     "1525619243083628544": {
@@ -37,9 +44,24 @@ function resolveRole(reaction) {
     return roles[reaction.emoji.name] || null;
 }
 
+async function handleRulesAcceptance(reaction, user) {
+    const member = await reaction.message.guild.members.fetch(user.id);
+    const welcomeRole = reaction.message.guild.roles.cache.get(WELCOME_ROLE_ID);
+    const risingStarRole = reaction.message.guild.roles.cache.get(RISING_STAR_ROLE_ID);
+
+    if (welcomeRole) await member.roles.remove(welcomeRole).catch(() => {});
+    if (risingStarRole) await member.roles.add(risingStarRole).catch(() => {});
+
+    console.log(`${reaction.emoji} ${user.tag} a accepté le règlement -> rôle Étoile montante`);
+}
+
 async function handleReactionAdd(reaction, user) {
     if (user.bot) return;
     if (!(await resolvePartial(reaction))) return;
+
+    if (reaction.message.id === RULES_MESSAGE_ID && reaction.emoji.name === RULES_REACTION_EMOJI) {
+        return handleRulesAcceptance(reaction, user);
+    }
 
     const roleID = resolveRole(reaction);
     if (!roleID) return;

@@ -7,11 +7,51 @@ const {
     ChannelType,
     ComponentType,
     EmbedBuilder,
+    AttachmentBuilder,
 } = require("discord.js");
 const { sendModerationLog } = require("../utils/logger");
 const { getOrCreateMutedRole } = require("../utils/muteRole");
+const { generatePollCard, POLL_EMOJIS } = require("../utils/pollCard");
+const { registerPoll } = require("../utils/pollManager");
+const COLORS = require("../utils/colors");
 
 module.exports = [
+    {
+        name: "poll",
+        description: 'Crée un sondage avec résultats en temps réel ($poll "question" option1 option2 ...)',
+        permissions: [PermissionFlagsBits.ManageMessages],
+        execute: async (message, args) => {
+            const raw = args.join(" ");
+            const match = raw.match(/^"([^"]+)"\s*(.*)$/);
+
+            if (!match) {
+                return message.reply('❌ Utilise `$poll "question" option1 option2 ...` (2 à 10 options).');
+            }
+
+            const question = match[1].trim();
+            const options = match[2].split(/\s+/).filter(Boolean);
+
+            if (options.length < 2) {
+                return message.reply("❌ Indique au moins 2 options.");
+            }
+            if (options.length > POLL_EMOJIS.length) {
+                return message.reply(`❌ Maximum ${POLL_EMOJIS.length} options.`);
+            }
+
+            const votes = options.map(() => 0);
+            const buffer = generatePollCard({ question, options, votes, totalVotes: 0 });
+            const attachment = new AttachmentBuilder(buffer, { name: "poll.png" });
+
+            await message.delete().catch(() => {});
+            const pollMessage = await message.channel.send({ files: [attachment] });
+
+            for (let i = 0; i < options.length; i++) {
+                await pollMessage.react(POLL_EMOJIS[i]);
+            }
+
+            registerPoll(pollMessage.id, question, options);
+        },
+    },
     {
         name: "kick",
         description: "Expulse un membre ($kick @membre [raison])",
@@ -27,7 +67,7 @@ module.exports = [
             await sendModerationLog(message.guild, {
                 title: "Membre expulsé",
                 emoji: "👢",
-                color: 0xffa500,
+                color: COLORS.WARNING,
                 target: target.user,
                 moderator: message.author,
                 reason,
@@ -49,7 +89,7 @@ module.exports = [
             await sendModerationLog(message.guild, {
                 title: "Membre banni",
                 emoji: "🔨",
-                color: 0xed4245,
+                color: COLORS.DANGER,
                 target: target.user,
                 moderator: message.author,
                 reason,
@@ -71,7 +111,7 @@ module.exports = [
                 await sendModerationLog(message.guild, {
                     title: "Utilisateur débanni",
                     emoji: "🔓",
-                    color: 0x57f287,
+                    color: COLORS.SUCCESS,
                     target: user ?? { tag: "Inconnu", id: userID },
                     moderator: message.author,
                 });
@@ -98,7 +138,7 @@ module.exports = [
             await sendModerationLog(message.guild, {
                 title: "Membre rendu muet (voix + texte)",
                 emoji: "🔇",
-                color: 0xfee75c,
+                color: COLORS.MODERATE,
                 target: target.user,
                 moderator: message.author,
                 reason,
@@ -119,7 +159,7 @@ module.exports = [
             await sendModerationLog(message.guild, {
                 title: "Membre démute (voix + texte)",
                 emoji: "🔊",
-                color: 0x57f287,
+                color: COLORS.SUCCESS,
                 target: target.user,
                 moderator: message.author,
             });
@@ -149,7 +189,7 @@ module.exports = [
                 await sendModerationLog(message.guild, {
                     title: "Membre rendu muet (vocal)",
                     emoji: "🔇",
-                    color: 0xfee75c,
+                    color: COLORS.MODERATE,
                     target: target.user,
                     moderator: message.author,
                     reason,
@@ -163,7 +203,7 @@ module.exports = [
             await sendModerationLog(message.guild, {
                 title: "Membre rendu muet (textuel)",
                 emoji: "🔇",
-                color: 0xfee75c,
+                color: COLORS.MODERATE,
                 target: target.user,
                 moderator: message.author,
                 reason,
@@ -189,7 +229,7 @@ module.exports = [
                 await sendModerationLog(message.guild, {
                     title: "Membre démute (vocal)",
                     emoji: "🔊",
-                    color: 0x57f287,
+                    color: COLORS.SUCCESS,
                     target: target.user,
                     moderator: message.author,
                 });
@@ -202,7 +242,7 @@ module.exports = [
             await sendModerationLog(message.guild, {
                 title: "Membre démute (textuel)",
                 emoji: "🔊",
-                color: 0x57f287,
+                color: COLORS.SUCCESS,
                 target: target.user,
                 moderator: message.author,
             });
@@ -222,7 +262,7 @@ module.exports = [
             await sendModerationLog(message.guild, {
                 title: "Membre averti",
                 emoji: "⚠️",
-                color: 0xfaa61a,
+                color: COLORS.WARNING,
                 target: target.user,
                 moderator: message.author,
                 reason,
@@ -260,7 +300,7 @@ module.exports = [
             const embed = new EmbedBuilder()
                 .setTitle("🔀 Déplacement de salon vocal")
                 .setDescription(`Salon de départ : **${fromChannel.name}** (ton salon actuel).\nChoisis le salon d'arrivée ci-dessous, puis clique sur **Déplacer tout le monde**.`)
-                .setColor(0x5865f2);
+                .setColor(COLORS.PRIMARY);
 
             const panel = await message.reply({ embeds: [embed], components: buildComponents(true) });
 
@@ -316,7 +356,7 @@ module.exports = [
                     await sendModerationLog(message.guild, {
                         title: "Salon vocal déplacé en masse",
                         emoji: "🔀",
-                        color: 0x5865f2,
+                        color: COLORS.NEUTRAL,
                         target: null,
                         moderator: message.author,
                         reason: `${moved}/${members.length} membre(s) déplacé(s) de ${fromChannel.name} vers ${toChannel.name}`,
@@ -351,7 +391,7 @@ module.exports = [
             await sendModerationLog(message.guild, {
                 title: "Messages supprimés",
                 emoji: "🧹",
-                color: 0x5865f2,
+                color: COLORS.NEUTRAL,
                 target: null,
                 moderator: message.author,
                 reason: `${deleted.size} message(s) supprimé(s) dans ${message.channel}`,
