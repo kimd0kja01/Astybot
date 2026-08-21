@@ -15,6 +15,58 @@ const { generatePollCard, POLL_EMOJIS } = require("../utils/pollCard");
 const { registerPoll } = require("../utils/pollManager");
 const COLORS = require("../utils/colors");
 
+// Traduit les noms de permissions Discord.js (ex. "SendMessages") en libellés français lisibles.
+const PERMISSION_LABELS = {
+    ViewChannel: "Voir le salon",
+    SendMessages: "Envoyer des messages",
+    SendMessagesInThreads: "Envoyer dans les fils",
+    CreatePublicThreads: "Créer des fils publics",
+    CreatePrivateThreads: "Créer des fils privés",
+    EmbedLinks: "Intégrer des liens",
+    AttachFiles: "Joindre des fichiers",
+    AddReactions: "Ajouter des réactions",
+    UseExternalEmojis: "Emojis externes",
+    UseExternalStickers: "Stickers externes",
+    MentionEveryone: "Mentionner @everyone",
+    ManageMessages: "Gérer les messages",
+    ManageThreads: "Gérer les fils",
+    ReadMessageHistory: "Lire l'historique",
+    SendTTSMessages: "Messages TTS",
+    UseApplicationCommands: "Utiliser les commandes",
+    SendVoiceMessages: "Messages vocaux",
+    CreateInstantInvite: "Créer une invitation",
+    Connect: "Se connecter (vocal)",
+    Speak: "Parler (vocal)",
+    Stream: "Partager son écran",
+    UseVAD: "Détection vocale",
+    UseSoundboard: "Utiliser la soundboard",
+    PrioritySpeaker: "Priorité de parole",
+    MuteMembers: "Rendre muet",
+    DeafenMembers: "Rendre sourd",
+    MoveMembers: "Déplacer les membres",
+    ManageChannels: "Gérer le salon",
+    ManageRoles: "Gérer les permissions",
+    ManageWebhooks: "Gérer les webhooks",
+    UseEmbeddedActivities: "Activités intégrées",
+    RequestToSpeak: "Demander la parole",
+    ManageEvents: "Gérer les événements",
+    CreateEvents: "Créer des événements",
+};
+
+function translatePermission(flagName) {
+    return PERMISSION_LABELS[flagName] || flagName.replace(/([a-z])([A-Z])/g, "$1 $2");
+}
+
+const CHANNEL_TYPE_LABELS = {
+    [ChannelType.GuildText]: "💬 Texte",
+    [ChannelType.GuildVoice]: "🔊 Vocal",
+    [ChannelType.GuildCategory]: "📁 Catégorie",
+    [ChannelType.GuildAnnouncement]: "📢 Annonces",
+    [ChannelType.GuildForum]: "🗂️ Forum",
+    [ChannelType.GuildStageVoice]: "🎙️ Stage",
+    [ChannelType.GuildMedia]: "🖼️ Média",
+};
+
 module.exports = [
     {
         name: "poll",
@@ -370,6 +422,82 @@ module.exports = [
                 if (reason === "time") {
                     await panel.edit({ components: [] }).catch(() => {});
                 }
+            });
+        },
+    },
+    {
+        name: "chanperms",
+        description: "Liste les droits (rôles + membres) de tous les salons dans un fichier .txt ($chanperms)",
+        permissions: [PermissionFlagsBits.ManageRoles],
+        execute: async (message) => {
+            const guild = message.guild;
+            await guild.members.fetch();
+
+            const formatChannelBlock = (channel) => {
+                const typeLabel = CHANNEL_TYPE_LABELS[channel.type] || "❓";
+                const header = `-- ${typeLabel} #${channel.name} (${channel.id}) --`;
+                const overwrites = [...channel.permissionOverwrites.cache.values()];
+
+                if (overwrites.length === 0) {
+                    return `${header}\n  (Aucune permission spécifique, hérite du serveur)`;
+                }
+
+                const entryLines = overwrites
+                    .map((overwrite) => {
+                        const isRole = overwrite.type === 0;
+                        const subject = isRole ? guild.roles.cache.get(overwrite.id) : guild.members.cache.get(overwrite.id);
+                        if (!subject) return null;
+
+                        const name = isRole ? `@${subject.name}` : subject.user.tag;
+                        const allowed = overwrite.allow.toArray().map(translatePermission);
+                        const denied = overwrite.deny.toArray().map(translatePermission);
+
+                        const parts = [`  - ${isRole ? "🎭" : "👤"} ${name}`];
+                        if (allowed.length) parts.push(`      Autorisé : ${allowed.join(", ")}`);
+                        if (denied.length) parts.push(`      Refusé   : ${denied.join(", ")}`);
+                        return parts.join("\n");
+                    })
+                    .filter(Boolean);
+
+                return `${header}\n${entryLines.join("\n")}`;
+            };
+
+            const allChannels = [...guild.channels.cache.values()].filter((c) => c.permissionOverwrites);
+            const categories = allChannels
+                .filter((c) => c.type === ChannelType.GuildCategory)
+                .sort((a, b) => a.rawPosition - b.rawPosition);
+            const nonCategoryChannels = allChannels.filter((c) => c.type !== ChannelType.GuildCategory);
+
+            const lines = [
+                `Permissions du serveur "${guild.name}"`,
+                `Généré le ${new Date().toLocaleString("fr-FR")} par ${message.author.tag}`,
+                "=".repeat(60),
+            ];
+
+            const uncategorized = nonCategoryChannels
+                .filter((c) => !c.parentId)
+                .sort((a, b) => a.rawPosition - b.rawPosition);
+            if (uncategorized.length) {
+                lines.push("", "[Sans catégorie]");
+                for (const channel of uncategorized) lines.push("", formatChannelBlock(channel));
+            }
+
+            for (const category of categories) {
+                lines.push("", `[Catégorie] ${category.name}`, formatChannelBlock(category));
+                const children = nonCategoryChannels
+                    .filter((c) => c.parentId === category.id)
+                    .sort((a, b) => a.rawPosition - b.rawPosition);
+                for (const channel of children) lines.push("", formatChannelBlock(channel));
+            }
+
+            const content = lines.join("\n");
+            const attachment = new AttachmentBuilder(Buffer.from(content, "utf-8"), {
+                name: `permissions-${guild.id}.txt`,
+            });
+
+            await message.reply({
+                content: `📄 Permissions de ${allChannels.length} salon(s)/catégorie(s) sur **${guild.name}**.`,
+                files: [attachment],
             });
         },
     },
